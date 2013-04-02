@@ -1,0 +1,135 @@
+#!/bin/sh
+
+print_usage()
+{
+  cat <<EOF
+Usage: jsbootstrap [opts] project-name
+    -j include jquery and jasmine-jquery
+EOF
+  exit 2
+}
+
+OPTIND=1
+jasmine_revision=fd914337925a1e2729e2583a1023b2293d54ca55
+
+jquery=
+while getopts j name
+do
+  case $name in
+    j)
+      jquery=1
+      ;;
+    ?)
+      print_usage
+      exit 2;;
+  esac
+done
+
+shift $(($OPTIND - 1))
+
+name=$1
+
+if [ -z "${name}" ] ; then
+  echo 'Please provide a project name'
+  print_usage
+  exit 2
+fi
+
+
+mkdir $name
+cd $name
+
+git init .         
+
+echo "*.swp" > .gitignore
+
+mkdir lib src test
+mkdir test/lib
+
+touch src/${name}.coffee
+
+cat <<EOT > test/${name}_spec.js
+describe('hello', function() {
+  it('works', function() {
+    expect(true).toBe(true);
+  })
+})
+EOT
+
+
+echo 'Downloading jasmine'
+curl -L -# "https://github.com/pivotal/jasmine/archive/${jasmine_revision}.tar.gz" | tar zx -C test/lib \
+  --transform "s!-${jasmine_revision}!!"
+echo 'Downloading phantom-jasmine'
+curl -L -# https://github.com/jcarver989/phantom-jasmine/archive/master.tar.gz | tar zx -C test/lib \
+  --transform "s!-master!!"
+
+
+cat <<EOT > Guardfile
+require 'guard/shell'
+
+def compile_coffee file
+  %x{coffee --compile --output lib #{file}}
+  puts "Compiled #{file}"
+end
+
+def run_tests
+  %x{if which phantomjs >/dev/null 2>&1; then phantomjs test/lib/phantom-jasmine/lib/run_jasmine_test.coffee ./test/test-runner.html; fi}
+end
+
+guard :shell do
+  watch %r{src/(.+).coffee$} do |m|
+    compile_coffee m[0]
+    run_tests
+  end
+
+  watch %r{test/(.+).js$} do
+    run_tests
+  end
+end
+EOT
+
+
+cat <<EOT > test/test-runner.html
+<!doctype html>
+<html>
+  <head>
+    <title>Jasmine Specs</title>
+    <link rel="stylesheet" type="text/css" href="./lib/jasmine/lib/jasmine-core/jasmine.css">
+    <script type="text/javascript" src="./lib/jasmine/lib/jasmine-core/jasmine.js"></script>
+    <script type="text/javascript" src="./lib/jasmine/lib/jasmine-core/jasmine-html.js"></script>
+EOT
+
+if [ -n "$jquery" ] ; then
+  echo 'Downloading jquery'
+  curl -# http://code.jquery.com/jquery-1.9.1.js > test/lib/jquery.js
+  echo '    <script type="text/javascript" src="./lib/jquery.js"></script>' >> test/test-runner.html
+
+  echo 'Downloading jasmine-jquery'
+  curl -# https://raw.github.com/velesin/jasmine-jquery/bdbe836005a2c47337fc8055c78edffc964b112a/lib/jasmine-jquery.js > test/lib/jasmine-jquery.js
+  echo '    <script type="text/javascript" src="./lib/jasmine-jquery.js"></script>' >> test/test-runner.html
+fi
+
+cat <<EOT >> test/test-runner.html
+
+    <script type="text/javascript" src="./lib/phantom-jasmine/lib/console-runner.js"></script>
+
+    <!-- Source Files -->
+    <script type="text/javascript" src="../lib/${name}.js"></script>
+
+    <!-- Test Files -->
+    <script type="text/javascript" src="./${name}_spec.js"></script>
+  </head>
+
+  <body>
+    <script type="text/javascript">
+      var console_reporter = new jasmine.ConsoleReporter()
+      jasmine.getEnv().addReporter(new jasmine.HtmlReporter());
+      jasmine.getEnv().addReporter(console_reporter);
+      jasmine.getEnv().execute();
+    </script>
+  </body>
+</html>
+EOT
+
+echo Ready!!
