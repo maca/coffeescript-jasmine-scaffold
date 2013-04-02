@@ -3,7 +3,7 @@ JS lib or jQuery plugin project generator with jasmine specs, phantomjs command 
  
 Usage:
 
-    $ bash <(curl -L http://git.io/js-scaffold-0.1) -j my_lib
+    $ bash <(curl -L http://git.io/js-scaffold) -j my_lib
     $ cd my_lib
     $ guard
 
