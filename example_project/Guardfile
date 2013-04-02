@@ -1,0 +1,21 @@
+require 'guard/shell'
+
+def compile_coffee file
+  %x{coffee --compile --output lib #{file}}
+  puts "Compiled #{file}"
+end
+
+def run_tests
+  %x{if which phantomjs >/dev/null 2>&1; then phantomjs test/lib/phantom-jasmine/lib/run_jasmine_test.coffee ./test/test-runner.html; fi}
+end
+
+guard :shell do
+  watch %r{src/(.+).coffee$} do |m|
+    compile_coffee m[0]
+    run_tests
+  end
+
+  watch %r{test/(.+).js$} do
+    run_tests
+  end
+end
